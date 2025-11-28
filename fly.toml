@@ -1,0 +1,18 @@
+app = "REPLACE_WITH_FLY_APP_NAME"
+primary_region = "ams"
+
+[build]
+  image = ""
+
+[env]
+  BACKEND_HOST = "0.0.0.0"
+  BACKEND_PORT = "8000"
+  SENTRY_ENV = "production"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
