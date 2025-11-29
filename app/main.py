@@ -1,28 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db import engine
-from app.models import Base
-
-from app.auth import router as auth_router
-from app.routers.chat import router as chat_router
-
-# -------------------------------
-# Tworzenie tabel (NOWE MODELE)
-# -------------------------------
-Base.metadata.create_all(bind=engine)
-
-# -------------------------------
-# FastAPI app
-# -------------------------------
-app = FastAPI(
-    title="KorepetytorAI Backend",
-    version="1.0.0",
+from app.db import Base, engine
+from app.routers import (
+    user,
+    auth,
+    chat,
+    leaderboard,
+    materials,
+    xp,
+    health
 )
 
-# -------------------------------
-# CORS – na razie open access
-# -------------------------------
+# --- CREATE TABLES ---
+Base.metadata.create_all(bind=engine)
+
+# --- APP INSTANCE ---
+app = FastAPI()
+
+# --- CORS ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,15 +27,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------------
-# Routers
-# -------------------------------
-app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
-app.include_router(chat_router, prefix="/api/chat", tags=["chat"])
+# --- ROUTERS ---
+app.include_router(user.router, prefix="/user", tags=["User"])
+app.include_router(auth. router, prefix="/auth", tags=["Auth"])
+app.include_router(chat.router, prefix="/chat", tags=["Chat"])
+app.include_router(leaderboard.router, prefix="/leaderboard", tags=["Leaderboard"])
+app.include_router(materials.router, prefix="/materials", tags=["Materials"])
+app.include_router(xp.router, prefix="/xp", tags=["XP"])
+app.include_router(health.router, prefix="/health", tags=["Health"])
 
-# -------------------------------
-# Healthcheck
-# -------------------------------
+# --- ROOT ---
 @app.get("/")
 def root():
-    return {"status": "ok"}
+    return {"status": "ok", "message": "KorepetytorAI backend running"}
