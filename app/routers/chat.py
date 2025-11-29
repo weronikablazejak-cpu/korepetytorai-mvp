@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List
 from openai import OpenAI
@@ -7,18 +7,17 @@ from app.models import ChatMessage, Student
 from app.db import SessionLocal
 from app.streak import update_streak_after_message
 from app.config import OPENAI_API_KEY
+from app.auth import get_current_user  # ← DODANE! pobieramy usera z tokena
 
 router = APIRouter()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-
 # ============================================
 # MODELE Pydantic
 # ============================================
 class ChatIn(BaseModel):
-    student_id: int
-    message: str
+    message: str   # ← USUNIĘTO student_id!
 
 
 class ChatOut(BaseModel):
@@ -34,7 +33,7 @@ class ChatOut(BaseModel):
 # ENDPOINT /chat
 # ============================================
 @router.post("/chat", response_model=ChatOut)
-def chat(in_: ChatIn):
+def chat(in_: ChatIn, user=Depends(get_current_user)):   # ← TOKEN -> ID STUDENTA
 
     if not in_.message.strip():
         raise HTTPException(status_code=400, detail="Message is empty")
@@ -42,9 +41,9 @@ def chat(in_: ChatIn):
     db = SessionLocal()
 
     # -------------------------------------------------
-    # Pobierz studenta
+    # Pobierz studenta na podstawie JWT
     # -------------------------------------------------
-    student = db.query(Student).filter(Student.id == in_.student_id).first()
+    student = db.query(Student).filter(Student.id == user.id).first()
     if not student:
         db.close()
         raise HTTPException(status_code=404, detail="Student not found")
@@ -114,5 +113,5 @@ def chat(in_: ChatIn):
         total_xp=student.xp,
         level=student.level,
         streak=streak,
-        new_badges=[]   # dodamy później, gdy dopniesz badges
+        new_badges=[]
     )
