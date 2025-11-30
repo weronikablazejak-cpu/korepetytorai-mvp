@@ -1,26 +1,27 @@
-from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 # -----------------------------
 # Rejestracja / Logowanie
 # -----------------------------
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=6)
     name: Optional[str] = None
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 
 class LoginResponse(BaseModel):
-    token: str
+    access_token: str
+    token_type: str = "bearer"
     student_id: int
     name: str
+    email: EmailStr
     xp: int
     level: int
     streak: int
@@ -33,7 +34,6 @@ class LoginResponse(BaseModel):
 # Wiadomości czatu
 # -----------------------------
 class ChatIn(BaseModel):
-    student_id: int
     message: str
 
 

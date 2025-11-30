@@ -1,46 +1,40 @@
 from datetime import date
 from sqlalchemy.orm import Session
-from app.models import Student
+from app.models import UserStreak
+
 
 def update_streak_after_message(db: Session, student_id: int) -> int:
-    """
-    Aktualizuje streak ucznia po wiadomości.
-    Zwraca: current_streak (int)
-    """
+    """Update streak for a student based on today's activity."""
     today = date.today()
 
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if not student:
-        return 0
+    streak = db.query(UserStreak).filter(UserStreak.student_id == student_id).first()
+    if not streak:
+        streak = UserStreak(
+            student_id=student_id,
+            current_streak=1,
+            longest_streak=1,
+            last_streak_date=today,
+        )
+        db.add(streak)
+        db.flush()
+        return streak.current_streak
 
-    last_date = student.last_streak_date
+    last_date = streak.last_streak_date
 
-    # 1) brak daty -> pierwszy dzień
-    if last_date is None:
-        student.current_streak = 1
-        student.longest_streak = 1
-        student.last_streak_date = today
-        db.commit()
-        return student.current_streak
-
-    # 2) dzisiaj już był streak — nic nie rób
     if last_date == today:
-        return student.current_streak
+        return streak.current_streak
 
-    # 3) wczoraj było -> +1
-    delta_days = (today - last_date).days
+    delta_days = (today - last_date).days if last_date else None
 
     if delta_days == 1:
-        student.current_streak += 1
+        streak.current_streak += 1
     else:
-        # przerwa -> reset
-        student.current_streak = 1
+        streak.current_streak = 1
 
-    # longest streak
-    if student.current_streak > student.longest_streak:
-        student.longest_streak = student.current_streak
+    if streak.current_streak > streak.longest_streak:
+        streak.longest_streak = streak.current_streak
 
-    student.last_streak_date = today
-    db.commit()
+    streak.last_streak_date = today
+    db.flush()
 
-    return student.current_streak
+    return streak.current_streak

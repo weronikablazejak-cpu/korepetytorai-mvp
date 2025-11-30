@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.db
+.env
+.env.*
+*.sqlite3
+*.sqbpro
+venv/
+.idea/
+.DS_Store

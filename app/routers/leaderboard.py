@@ -1,28 +1,27 @@
-from fastapi import APIRouter
-from app.db import SessionLocal
-from app.models import User
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.db import get_db
+from app.models import Student
 
-@router.get("/leaderboard")
-def leaderboard(limit: int = 10):
-    db = SessionLocal()
+router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
-    users = (
-        db.query(User)
-        .order_by(User.xp.desc())
+
+@router.get("")
+def leaderboard(limit: int = 10, db: Session = Depends(get_db)):
+    students = (
+        db.query(Student)
+        .order_by(Student.xp.desc())
         .limit(limit)
         .all()
     )
 
-    db.close()
-
     return [
         {
-            "id": u.id,
-            "name": u.name,
-            "xp": u.xp,
-            "level": u.level
+            "id": s.id,
+            "name": s.name,
+            "xp": s.xp,
+            "level": s.level,
         }
-        for u in users
+        for s in students
     ]
