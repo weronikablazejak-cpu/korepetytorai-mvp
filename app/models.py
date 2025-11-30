@@ -3,9 +3,6 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db import Base
 
-# -----------------------------
-# TABELA students
-# -----------------------------
 class Student(Base):
     __tablename__ = "students"
 
@@ -17,34 +14,43 @@ class Student(Base):
     xp = Column(Integer, default=0)
     level = Column(Integer, default=1)
 
-    is_tester = Column(Boolean, default=True)
+    is_tester = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
 
-    subscription_expires = Column(String, nullable=True)
+    subscription_expires = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     messages = relationship("ChatMessage", back_populates="student")
     streak = relationship("UserStreak", uselist=False, back_populates="student")
+    conversation = relationship("Conversation", uselist=False, back_populates="student")
 
 
-# -----------------------------
-# TABELA messages
-# -----------------------------
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("Student", back_populates="conversation")
+    messages = relationship("ChatMessage", back_populates="conversation")
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"))
+    conversation_id = Column(Integer, ForeignKey("conversations.id"))
+
     role = Column(String)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     student = relationship("Student", back_populates="messages")
+    conversation = relationship("Conversation", back_populates="messages")
 
 
-# -----------------------------
-# TABELA streak
-# -----------------------------
 class UserStreak(Base):
     __tablename__ = "user_streaks"
 
