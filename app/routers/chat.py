@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Header
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from app.models import ChatMessage, Student, Conversation
+from app.models import ChatMessage, Student
 from app.db import get_db
 from app.streak import update_streak_after_message
 from app.auth import get_current_user
@@ -23,39 +23,22 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=OPENAI_API_KEY)
 
 
-def get_or_create_conversation(db: Session, user: Student):
-    convo = (
-        db.query(Conversation)
-        .filter(Conversation.student_id == user.id)
-        .first()
-    )
-    if not convo:
-        convo = Conversation(
-            student_id=user.id,
-            created_at=datetime.utcnow()
-        )
-        db.add(convo)
-        db.commit()
-        db.refresh(convo)
-    return convo
-
-
 @router.post("", response_model=ChatOut)
 def chat(
     in_: ChatIn,
+    authorization: str = Header(None),   # 🔥 kluczowe, żeby JWT działał
     db: Session = Depends(get_db),
-    user: Student = Depends(get_current_user),
 ):
+    # 🔥 Pobranie usera z JWT
+    user = get_current_user(authorization)
+
     if not in_.message or not in_.message.strip():
         raise HTTPException(status_code=400, detail="Message is empty")
 
-    # 🔥 1. Pobieramy konwersację
-    convo = get_or_create_conversation(db, user)
-
-    # 🔥 2. Pobieramy ostatnie 20 wiadomości tej konwersacji
+    # 🔥 Pobieramy 20 ostatnich wiadomości użytkownika
     history = (
         db.query(ChatMessage)
-        .filter(ChatMessage.conversation_id == convo.id)
+        .filter(ChatMessage.student_id == user.id)
         .order_by(ChatMessage.created_at.desc())
         .limit(20)
         .all()
@@ -66,54 +49,50 @@ def chat(
         for msg in reversed(history)
     ]
 
-    # Dodaj wiadomość użytkownika
+    # Dodajemy wiadomość użytkownika
     formatted_history.append({"role": "user", "content": in_.message})
 
-    # 🔥 3. Zapisujemy wiadomość usera
+    # 🔥 Zapisujemy wiadomość użytkownika
     db.add(ChatMessage(
         student_id=user.id,
-        conversation_id=convo.id,
         role="user",
-        content=in_.message
+        content=in_.message,
+        created_at=datetime.utcnow(),
     ))
     db.flush()
 
-    # 🔥 4. Wywołanie OpenAI w nowym API
+    # 🔥 Wywołanie OpenAI
     client = _get_client()
 
     try:
         response = client.responses.create(
             model="gpt-4o-mini",
-            input=formatted_history
+            input=formatted_history,
         )
         answer = response.output_text
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"OpenAI error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"OpenAI error: {str(e)}")
 
-    # 🔥 5. Zapisujemy odpowiedź AI
+    # 🔥 Zapisujemy odpowiedź AI
     db.add(ChatMessage(
         student_id=user.id,
-        conversation_id=convo.id,
         role="assistant",
-        content=answer
+        content=answer,
+        created_at=datetime.utcnow(),
     ))
 
-    # 🔥 6. XP przy każdej wiadomości
+    # 🔥 XP system
     base_xp = 5
     bonus_xp = 5 if len(in_.message) > 80 else 0
     xp_awarded = base_xp + bonus_xp
 
     user.xp += xp_awarded
 
-    # Level-up co 100 XP
     while user.xp >= user.level * 100:
         user.level += 1
 
-    # 🔥 7. Aktualizacja streaka
+    # 🔥 Streak
     streak = update_streak_after_message(db, user.id)
 
     db.commit()
