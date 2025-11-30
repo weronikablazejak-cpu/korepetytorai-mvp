@@ -1,77 +1,49 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.db import SessionLocal
 from app.models import ChatMessage, Student
-from app.db import get_db
-from app.streak import update_streak_after_message
 from app.auth import get_current_user
 from app.config import OPENAI_API_KEY
-from app.schemas import ChatIn, ChatOut
-
-from openai import OpenAI
-
-router = APIRouter(prefix="/chat", tags=["chat"])
+import openai
 
 
-def _get_client() -> OpenAI:
-    if not OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OPENAI_API_KEY not configured",
-        )
-    return OpenAI(api_key=OPENAI_API_KEY)
+router = APIRouter()
 
 
-@router.post("", response_model=ChatOut)
-def chat(
-    in_: ChatIn,
-    db: Session = Depends(get_db),
-    user: Student = Depends(get_current_user),
-):
-    if not in_.message or not in_.message.strip():
-        raise HTTPException(status_code=400, detail="Message is empty")
+class ChatIn(BaseModel):
+    message: str
 
-    # Save user message
+
+@router.post("/chat")
+def chat(in_: ChatIn, user: Student = Depends(get_current_user)):
+    db: Session = SessionLocal()
+
+    # Zapisujemy wiadomość użytkownika
     db.add(ChatMessage(student_id=user.id, role="user", content=in_.message))
-    db.flush()
-
-    # Call OpenAI
-    client = _get_client()
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[
-                {"role": "system", "content": "Jesteś KorepetytorAI."},
-                {"role": "user", "content": in_.message},
-            ],
-        )
-        answer = response.choices[0].message.content
-    except Exception:
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to fetch response from OpenAI")
-
-    # Save assistant reply
-    db.add(ChatMessage(student_id=user.id, role="assistant", content=answer))
-
-    # XP and leveling
-    base_xp = 5
-    bonus = 5 if len(in_.message) > 80 else 0
-    xp_awarded = base_xp + bonus
-    user.xp += xp_awarded
-
-    while user.xp >= user.level * 100:
-        user.level += 1
-
-    streak = update_streak_after_message(db, user.id)
-
     db.commit()
-    db.refresh(user)
 
-    return ChatOut(
-        answer=answer,
-        xp_awarded=xp_awarded,
-        total_xp=user.xp,
-        level=user.level,
-        streak=streak,
-        new_badges=[],
-    )
+    # 🔥 ChatGPT odpowiedź
+    try:
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "user", "content": in_.message}
+            ],
+            max_tokens=250
+        )
+
+        reply = response.choices[0].message["content"]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI error: {e}")
+
+    # Zapisujemy odpowiedź AI
+    db.add(ChatMessage(student_id=user.id, role="assistant", content=reply))
+    db.commit()
+    db.close()
+
+    return {"answer": reply}
