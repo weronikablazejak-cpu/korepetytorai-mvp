@@ -116,3 +116,24 @@ def login(data: LoginIn):
 def get_current_user(token: str = Depends(lambda: None)):
     """To uzupełnimy później, jak dodamy subskrypcje."""
     return None
+from fastapi import Header
+
+def get_current_user(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing token")
+
+    try:
+        scheme, token = authorization.split()
+        if scheme.lower() != "bearer":
+            raise HTTPException(status_code=401, detail="Invalid token format")
+
+        data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    db = SessionLocal()
+    user = db.query(Student).filter(Student.id == data["id"]).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    return user
