@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -7,21 +7,17 @@ import jwt
 from app.db import SessionLocal
 from app.models import Student
 from app.config import SECRET_KEY
-
 from passlib.context import CryptContext
 
-# 🔥 Stabilny backend — argon2, działa idealnie na Railway
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 router = APIRouter()
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24h
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 
-# ----------------------------
 # Schemas
-# ----------------------------
 class RegisterIn(BaseModel):
     email: str
     password: str
@@ -33,20 +29,15 @@ class LoginIn(BaseModel):
     password: str
 
 
-# ----------------------------
-# JWT helper
-# ----------------------------
+# JWT
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-# ----------------------------
-# Password helper
-# ----------------------------
+# Password helpers
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -55,9 +46,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-# ----------------------------
 # Register
-# ----------------------------
 @router.post("/auth/register")
 def register(data: RegisterIn):
     db: Session = SessionLocal()
@@ -87,9 +76,7 @@ def register(data: RegisterIn):
     return {"message": "Account created!"}
 
 
-# ----------------------------
 # Login
-# ----------------------------
 @router.post("/auth/login")
 def login(data: LoginIn):
     db: Session = SessionLocal()
@@ -110,29 +97,26 @@ def login(data: LoginIn):
     }
 
 
-# ----------------------------
-# Auth dependency (placeholder)
-# ----------------------------
-def get_current_user(token: str = Depends(lambda: None)):
-    """To uzupełnimy później, jak dodamy subskrypcje."""
-    return None
-from fastapi import Header
-
+# --- 🔥 AUTH MIDDLEWARE (KLUCZOWE) ---
 def get_current_user(authorization: str = Header(None)):
     if not authorization:
-        raise HTTPException(status_code=401, detail="Missing token")
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
 
     try:
         scheme, token = authorization.split()
+
         if scheme.lower() != "bearer":
             raise HTTPException(status_code=401, detail="Invalid token format")
 
-        data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     db = SessionLocal()
-    user = db.query(Student).filter(Student.id == data["id"]).first()
+    user = db.query(Student).filter(Student.id == payload["id"]).first()
+    db.close()
+
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
