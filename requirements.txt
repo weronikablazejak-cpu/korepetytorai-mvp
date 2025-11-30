@@ -11,3 +11,4 @@ email-validator
 passlib[argon2]
 email-validator
 passlib[bcrypt]
+argon2_cffi
