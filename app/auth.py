@@ -70,7 +70,7 @@ def register(data: RegisterIn):
 
     student = Student(
         email=data.email,
-        password=hashed,
+        hashed_password=hashed,
         name=data.name,
         xp=0,
         level=1,
