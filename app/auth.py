@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -10,10 +10,10 @@ from app.config import SECRET_KEY
 
 from passlib.context import CryptContext
 
-router = APIRouter()
-
-# Stabilny backend hashowania
+# 🔥 Stabilny backend — argon2, działa idealnie na Railway
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+
+router = APIRouter()
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24h
@@ -37,18 +37,15 @@ class LoginIn(BaseModel):
 # JWT helper
 # ----------------------------
 def create_access_token(data: dict):
-    # WYMUSZAMY stringi w JWT – Railway inaczej rzuca błędami
-    to_encode = {k: str(v) for k, v in data.items()}
-
+    to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
 # ----------------------------
-# Password helpers
+# Password helper
 # ----------------------------
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
@@ -104,14 +101,18 @@ def login(data: LoginIn):
     if not verify_password(data.password, student.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({
-        "id": student.id,
-        "email": student.email
-    })
+    token = create_access_token({"id": student.id, "email": student.email})
 
     return {
         "token": token,
         "student_id": student.id,
-        "name": student.name,
-        "email": student.email
+        "name": student.name
     }
+
+
+# ----------------------------
+# Auth dependency (placeholder)
+# ----------------------------
+def get_current_user(token: str = Depends(lambda: None)):
+    """To uzupełnimy później, jak dodamy subskrypcje."""
+    return None
