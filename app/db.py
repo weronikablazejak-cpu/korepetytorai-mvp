@@ -3,7 +3,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./korepetytorai_dev.db")
+# 🔥 Jedna, wspólna baza dla lokalnie i Railway
+DATABASE_URL = "sqlite:///./app.db"
 
 engine_kwargs = {}
 if DATABASE_URL.startswith("sqlite"):
